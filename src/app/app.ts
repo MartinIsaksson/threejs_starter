@@ -16,11 +16,13 @@ import {
   WebGLCubeRenderTarget,
   WebGLRenderer,
 } from "three";
-import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import sunVertex from "./shaders/sun/vertex.glsl";
 import sunFragment from "./shaders/sun/fragment.glsl";
 import perlinFragment from "./shaders/perlin/fragment.glsl";
 import perlinVertex from "./shaders/perlin/vertex.glsl";
+import glowVertex from "./shaders/glow/vertex.glsl";
+import glowFragment from "./shaders/glow/fragment.glsl";
 const sizes = {
   width: window.innerWidth,
   height: window.innerHeight,
@@ -44,6 +46,7 @@ export class App {
   perlinBall!: Mesh;
   perlinScene: Scene;
   controls: OrbitControls;
+  materialGlow!: ShaderMaterial;
   constructor() {
     this.clock = new Clock();
     this.scene = new Scene();
@@ -65,9 +68,21 @@ export class App {
       },
     });
     this.sun = new Mesh(new SphereBufferGeometry(1, 32, 64), this.materialSun);
+    // this.addGlow();
     this.scene.add(this.sun);
     this.renderer.setSize(sizes.width, sizes.height);
     this.render();
+  }
+  private addGlow() {
+    this.materialGlow = new ShaderMaterial({
+      vertexShader: glowVertex,
+      fragmentShader: glowFragment,
+      uniforms: {
+        uTime: { value: 0.0 },
+        uPerlin: { value: null },
+      },
+    });
+    this.sun = new Mesh(new SphereBufferGeometry(1, 32, 64), this.materialGlow);
   }
   addTexture() {
     this.cubeRenderTarget = new WebGLCubeRenderTarget(256, {
@@ -99,6 +114,5 @@ export class App {
     this.materialSun.uniforms.uTime.value = elapsedTime;
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(() => this.render());
-
   }
 }

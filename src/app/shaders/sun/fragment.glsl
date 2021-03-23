@@ -5,6 +5,7 @@ varying vec3 vPosition;
 varying vec2 vUv;
 varying vec3 vLayer0;
 varying vec3 vLayer1;
+varying vec3 vLayer2;
 varying vec3 vEyeVector;
 
 vec3 brightnessToColor(float b) {
@@ -18,13 +19,15 @@ float supersun() {
   float sum = 0.;
   sum += textureCube(uPerlin, vLayer0).r;
   sum += textureCube(uPerlin, vLayer1).r;
+  sum += textureCube(uPerlin, vLayer2).r * 0.3;
   sum *= 0.4;
   return sum;
 }
 void main() {
   float brightness = supersun();
   brightness = brightness*4. + 1.;
-  brightness += Fresnel(vEyeVector, vPosition); //Makes the sides "pop"
+  float fres = Fresnel(vEyeVector, vPosition); //Makes the sides "pop"
+  brightness += pow(fres, 0.8);
   vec3 color = brightnessToColor(brightness);
   // gl_FragColor = vec4(Fresnel(vEyeVector, vPosition));
   gl_FragColor = vec4(color, 1.0);
