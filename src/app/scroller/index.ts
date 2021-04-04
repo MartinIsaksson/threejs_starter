@@ -1,5 +1,6 @@
 import { GUI } from "dat.gui";
-import gsap, { random } from "gsap/all";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   AxesHelper,
   Color,
@@ -7,12 +8,14 @@ import {
   FontLoader,
   Group,
   LoadingManager,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   PlaneBufferGeometry,
   PlaneGeometry,
+  Quaternion,
   Raycaster,
   Scene,
   SphereBufferGeometry,
@@ -55,6 +58,7 @@ export class SmoothScroll {
   font: any;
 
   constructor() {
+    gsap.registerPlugin(ScrollTrigger);
     // this.renderer.setClearColor(0xffffff);
     this.renderer.shadowMap.enabled = true;
     this.renderer.setSize(sizes.width, sizes.height);
@@ -77,6 +81,13 @@ export class SmoothScroll {
 
     this.setupLight();
     this.setupImagePlanes();
+
+    // ScrollTrigger.defaults({
+    //   scrub: true,
+    //   animation: {
+
+    //   }
+    // })
 
     this.raycaster = new Raycaster();
     this.mouse = new Vector2();
@@ -123,7 +134,6 @@ export class SmoothScroll {
       console.log(textGeometry.boundingBox?.max.x);
       console.log(textGeometry.boundingBox);
       textMesh.position.set(geom.boundingBox!.min.x, spacing, 0);
-      // textMesh.rotation.x = Math.PI / 8;
       const group = new Group();
       group.add(imagePlane);
       group.add(textMesh);
@@ -165,16 +175,41 @@ export class SmoothScroll {
       const image = group.children[0] as Mesh;
       const imageGeom = image.geometry as PlaneGeometry;
       //TODO make the quaternion on the text rotate after the camera
+      const quaternion = new Quaternion();
+      const rotationMatrix = new Matrix4();
+      const targetQuaternion = new Quaternion();
 
       const text = group.children[1];
       if (intersectedObjects.includes(group.children[0].id)) {
         gsap.to(image.scale, { x: 1.7, y: 1.7, duration: 1.5 });
         gsap.to(image.rotation, { y: -Math.PI / 6, duration: 1.5 });
+        gsap.to(text.quaternion, {
+          onUpdate: () => {
+            // const cameraNormalPos = this.camera.position.normalize();
+            console.log("NORMAL CAMERA POS", this.camera.position);
+            const dVec3 = text.position.clone().sub(this.camera.position);
+            rotationMatrix.lookAt(this.camera.position, text.position, text.up);
+            targetQuaternion.setFromRotationMatrix(rotationMatrix);
+            // const testAngle = Math.atan2(dVec3.y, dVec3.x) * (180 / Math.PI);
+            text.quaternion.rotateTowards(targetQuaternion, 0.5);
+            // console.log("angle", testAngle);
+            // text.rotation.x = -testAngle;
+            // text.rotateOnAxis(new Vector3(1, 0, 0), testAngle);
+            // text.quaternion.setFromAxisAngle(this.camera.position, 0.5);
+          },
+        });
         // gsap.to(text.rotation, { y: Math.PI / 10 });
         gsap.to(text.position, { z: 1.5, x: -0.5, duration: 1 });
       } else {
         gsap.to(image.scale, { x: 1, y: 1, duration: 1.5 });
         gsap.to(image.rotation, { y: 0, duration: 0.5 });
+        gsap.to(text.quaternion, {
+          onStart: () => {
+            const dVec3 = text.position.clone().sub(new Vector3(0, 0, 5));
+            rotationMatrix.lookAt(dVec3, text.position, text.up);
+            text.quaternion.rotateTowards(targetQuaternion, 180);
+          },
+        });
         gsap.to(text.rotation, { y: 0, duration: 1 });
         gsap.to(text.position, {
           z: 0,
