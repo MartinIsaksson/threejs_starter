@@ -214,7 +214,7 @@ export class SmoothScroll {
     this.points = new Points(particlesGeometry, particlesMaterial);
     this.points.position.set(0, this.camera.position.y, -2);
     this.points.layers.enable(BLOOM_SCENE);
-    this.scene.add(this.points);
+    // this.scene.add(this.points);
   }
   async setupImagePlanes() {
     this.font = await this.fontLoader.loadAsync(

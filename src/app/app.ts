@@ -1,6 +1,8 @@
 import {
   AmbientLight,
   AxesHelper,
+  BoxGeometry,
+  CatmullRomCurve3,
   Clock,
   CubeCamera,
   CubeTextureLoader,
@@ -8,6 +10,8 @@ import {
   LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
+  Object3D,
+  Path,
   PerspectiveCamera,
   Quaternion,
   RGBFormat,
@@ -52,8 +56,9 @@ export class App {
   controls: OrbitControls;
   materialGlow!: ShaderMaterial;
   cubeLoader: CubeTextureLoader;
-  rotationMatrix: Matrix4;
   smallSun: Mesh;
+  cameraPath: Vector3[];
+  pathIndex = 0;
   constructor() {
     this.clock = new Clock();
     this.scene = new Scene();
@@ -74,6 +79,7 @@ export class App {
     this.scene.environment = environmentMap;
     // const ambientLight = new AmbientLight(0xff00ff, 0.5);
     // this.scene.add(ambientLight);
+    this.cameraPath = this.createCameraPath();
     this.controls = new OrbitControls(this.camera, this.canvas);
 
     this.addTexture();
@@ -97,68 +103,21 @@ export class App {
     this.scene.add(this.smallSun);
     this.renderer.setSize(sizes.width, sizes.height);
     //Subtracts from the vector(camera position)
-    //this.camera.position.sub(new Vector3(1,1,1));
 
-    console.log("distance", this.camera.position.distanceTo(this.sun.position));
-    console.log("dot", this.camera.position.dot(this.sun.position));
-    const cameraPositionTimeLine = gsap.timeline();
-    const targetVector = new Vector3(-2, 5, 4);
-    console.log("target vector", targetVector);
-    const startPosition = this.camera.position.clone();
-    // cameraTimeLine.fromTo();
-    this.rotationMatrix = new Matrix4();
-    const qm = new Quaternion();
-    // this.rotationMatrix.lookAt(
-    //   this.sun.position,
-    //   this.camera.position,
-    //   this.camera.up
-    // );
-    // targetQuaternion.setFromRotationMatrix(this.rotationMatrix);
-    cameraPositionTimeLine.to(
-      this.camera.position,
-      {
-        x: targetVector.x,
-        y: targetVector.y,
-        z: targetVector.z,
-        duration: 2,
-        onUpdate: () => {
-          this.camera.lookAt(this.sun.position);
-        },
-        ease: "Sine.easeOut",
-      },
-      0
-    );
-    cameraPositionTimeLine.to(
-      this.camera.position,
-      {
-        x: 0,
-        y: 5,
-        z: 0,
-        duration: 4,
-        onUpdate: () => {
-          this.camera.lookAt(this.sun.position);
-        },
-        ease: "Sine.easeOut",
-      },
-      1
-    );
-    cameraPositionTimeLine.to(
-      this.camera.position,
-      {
-        x: -0.4,
-        y: 0.9,
-        z: 0.8,
-        duration: 5,
-        delay: 2,
-        onUpdate: () => {
-          this.camera.quaternion.slerp(this.smallSun.quaternion, 0.07);
-        },
-        ease: "Sine.easeOut",
-      },
-      2
-    );
-    // cameraPositionTimeLine.pause();
     this.render();
+  }
+  createCameraPath(): Vector3[] {
+    const spline = new CatmullRomCurve3([
+      new Vector3(5, 0, 5),
+      new Vector3(5, 0, -5),
+      new Vector3(-5, 0, -5),
+      new Vector3(-5, 0, 5),
+      new Vector3(5, -5, 5),
+      new Vector3(10, 0, 10),
+      new Vector3(3, 3, 3),
+    ]);
+    const numberOfPoints = 10;
+    return spline.getPoints(numberOfPoints);
   }
   private addGlow() {
     this.materialGlow = new ShaderMaterial({
@@ -193,11 +152,34 @@ export class App {
     );
     this.perlinScene.add(this.perlinBall);
   }
-
+  displacement = new Vector3();
+  desiredVelocity = new Vector3();
+  moveCamera(objectToMove: Object3D, maxSpeed = 0.05, tolerance = 0.1) {
+    const pathVector = this.cameraPath[this.pathIndex];
+    if (!pathVector) return;
+    this.displacement.subVectors(pathVector, objectToMove.position);
+    const distance = this.displacement.length();
+    if (distance > tolerance) {
+      let speed = distance / 3;
+      speed = Math.min(speed, maxSpeed);
+      this.desiredVelocity
+        .copy(this.displacement)
+        .multiplyScalar(speed / distance);
+    } else {
+      console.log("Changing path index!");
+      this.desiredVelocity.set(0, 0, 0);
+      this.pathIndex++;
+    }
+    objectToMove.position.addVectors(
+      objectToMove.position,
+      this.desiredVelocity
+    );
+  }
   private render() {
     const elapsedTime = this.clock.getElapsedTime();
 
-    // this.camera.lookAt(this.sun.position);
+    this.camera.lookAt(this.sun.position);
+    this.moveCamera(this.camera);
     this.cubeCamera.update(this.renderer, this.perlinScene);
     this.materialSun.uniforms.uPerlin.value = this.cubeRenderTarget.texture;
     this.materialPerlin.uniforms.uTime.value = elapsedTime;
