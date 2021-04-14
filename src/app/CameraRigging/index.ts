@@ -6,6 +6,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CameraHelper,
   CatmullRomCurve3,
   Clock,
   Color,
@@ -16,11 +17,13 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  Object3D,
   PerspectiveCamera,
   PlaneGeometry,
   Raycaster,
   Scene,
   ShadowMaterial,
+  SphereBufferGeometry,
   SpotLight,
   Vector2,
   Vector3,
@@ -55,11 +58,16 @@ export class CameraRigging {
   pointer = new Vector2();
   onDownPosition = new Vector2();
   onUpPosition = new Vector2();
-  spline: {
+  spline!: {
     curve: CatmullRomCurve3;
     line: Line;
   };
   point = new Vector3();
+  flow: Flow;
+  parent: Object3D;
+  cinematicCamera: PerspectiveCamera;
+  boxFollower: Mesh;
+  cinematicCameraHelper: CameraHelper;
 
   constructor() {
     this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -79,6 +87,7 @@ export class CameraRigging {
     this.camera.position.set(0, 250, 1000);
     this.camera.lookAt(new Vector3());
     this.scene.add(this.camera);
+
     this.addLights();
     this.addControls();
     this.addGrid();
@@ -88,25 +97,37 @@ export class CameraRigging {
       new Vector3(-53.56300074753207, 171.49711742836848, -14.495472686253045),
       new Vector3(-91.40118730204415, 176.4306956436485, -6.958271935582161),
       new Vector3(-383.785318791128, 491.1365363371675, 47.869296953772746),
+      new Vector3(100, 150, 20),
+      new Vector3(0, 0, -300),
     ]);
-    this.spline = this.setupCurveAndPath(this.positions);
-    this.updateCurveLine();
 
-    // new Flow();
+    this.parent = new Object3D();
+    this.scene.add(this.parent);
+    this.cinematicCamera = new PerspectiveCamera(
+      75,
+      sizes.width / sizes.height,
+      0.01,
+      1000
+    );
+    this.cinematicCameraHelper = new CameraHelper(this.cinematicCamera);
+    this.scene.add(this.cinematicCameraHelper);
+    this.parent.add(this.cinematicCamera);
+    this.boxFollower = new Mesh(
+      this.boxGeometry,
+      new MeshBasicMaterial({ color: "black" })
+    );
+    this.scene.add(this.boxFollower);
+    const objectToCurve = new Mesh(
+      new SphereBufferGeometry(20, 32, 32),
+      new MeshBasicMaterial({ color: "blue" })
+    );
+    this.flow = new Flow(objectToCurve);
+    this.flow.updateCurve(0, this.spline.curve);
+
+    this.scene.add(this.flow.object3D);
 
     this.addListeners();
     this.render();
-    setTimeout(() => {
-      this.addCurvePoint(new Vector3(100, 150, 20));
-      this.addCurvePoint();
-      (this.curveHandles[0].material as MeshBasicMaterial).color = new Color(
-        0x000000
-      );
-      setTimeout(() => {
-        this.addCurvePoint(new Vector3(150, 100, -20));
-      }, 1000);
-      console.log("FIRST CURVE HANDLE", this.curveHandles[0]);
-    }, 2000);
   }
 
   addListeners() {
@@ -118,14 +139,14 @@ export class CameraRigging {
     );
     document.addEventListener("pointerup", (event) => this.onPointerUp(event));
   }
-
+  //#region Curve functions
   setupCurveAndPath(positions: Vector3[]) {
     const bufferGeometry = new BufferGeometry();
     bufferGeometry.setAttribute(
       "position",
       new BufferAttribute(new Float32Array(ARC_SEGMENTS * 3), 3)
     );
-    const curve = new CatmullRomCurve3(positions, false, this.curve);
+    const curve = new CatmullRomCurve3(positions, true, this.curve);
     // const points = curve.getPoints(ARC_SEGMENTS); //* Doesnt work, gets the last position as
     // const geometry = new BufferGeometry().setFromPoints(points);
     const line = new Line(
@@ -147,6 +168,8 @@ export class CameraRigging {
       this.addCurvePoint(newPositions[index]);
       index++;
     }
+    this.spline = this.setupCurveAndPath(this.positions);
+    this.updateCurveLine();
   }
   addCurveObject(position?: Vector3): Mesh {
     const boxMaterial = new MeshBasicMaterial({
@@ -168,7 +191,7 @@ export class CameraRigging {
     if (!this.spline || !this.spline.curve.points.length) return;
     const position = this.spline.line.geometry.attributes.position;
     for (let i = 0; i < ARC_SEGMENTS; i++) {
-      const t = i / (ARC_SEGMENTS - 3);
+      const t = i / (ARC_SEGMENTS - 1);
 
       this.spline.curve.getPoint(t, this.point);
 
@@ -177,8 +200,8 @@ export class CameraRigging {
     position.needsUpdate = true;
     this.spline.line.matrixWorldNeedsUpdate = true;
   }
+  //#endregion Curve functions
   addControls() {
-    // Controls
     this.orbitControls = new OrbitControls(this.camera, this.canvas);
     this.orbitControls.enableDamping = true;
 
@@ -187,7 +210,6 @@ export class CameraRigging {
       console.log("event", event);
       this.orbitControls.enabled = !event.value;
     });
-
     this.transformControls.addEventListener("objectChange", () => {
       this.updateCurveLine();
     });
@@ -207,6 +229,45 @@ export class CameraRigging {
     light.shadow.mapSize.height = 1024;
     this.scene.add(light);
   }
+  addGrid() {
+    const planeGeometry = new PlaneGeometry(2000, 2000);
+    planeGeometry.rotateX(-Math.PI / 2);
+    const planeMaterial = new ShadowMaterial({ opacity: 0.2 });
+
+    const plane = new Mesh(planeGeometry, planeMaterial);
+    plane.position.y = -200;
+    plane.receiveShadow = true;
+    this.scene.add(plane);
+
+    const helper = new GridHelper(2000, 100);
+    helper.position.y = -199;
+    (helper.material as LineBasicMaterial).opacity = 0.25;
+    (helper.material as LineBasicMaterial).transparent = true;
+    this.scene.add(helper);
+  }
+  //20 sec
+  loopTime = 10;
+
+  render() {
+    const elapsed = this.clock.getElapsedTime();
+    const t = (elapsed % this.loopTime) / this.loopTime;
+    const next = ((elapsed + 0.5) % this.loopTime) / this.loopTime;
+    const position = this.spline.curve.getPointAt(t);
+    const lookAtPos = this.spline.curve.getPointAt(next);
+    lookAtPos.lerp(position, 0.2);
+    this.cinematicCamera.lookAt(lookAtPos);
+    this.cinematicCameraHelper.update();
+
+    this.boxFollower.position.copy(position);
+    this.cinematicCamera.position.copy(position);
+
+    this.orbitControls.update();
+    this.flow.moveAlongCurve(0.0001);
+    requestAnimationFrame(() => this.render());
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  //#region  PointerEvents
   onPointerDown(event: PointerEvent) {
     this.onDownPosition.x = event.clientX;
     this.onDownPosition.y = event.clientY;
@@ -235,25 +296,5 @@ export class CameraRigging {
       }
     }
   }
-  render() {
-    this.orbitControls.update();
-    requestAnimationFrame(() => this.render());
-    this.renderer.render(this.scene, this.camera);
-  }
-  addGrid() {
-    const planeGeometry = new PlaneGeometry(2000, 2000);
-    planeGeometry.rotateX(-Math.PI / 2);
-    const planeMaterial = new ShadowMaterial({ opacity: 0.2 });
-
-    const plane = new Mesh(planeGeometry, planeMaterial);
-    plane.position.y = -200;
-    plane.receiveShadow = true;
-    this.scene.add(plane);
-
-    const helper = new GridHelper(2000, 100);
-    helper.position.y = -199;
-    (helper.material as LineBasicMaterial).opacity = 0.25;
-    (helper.material as LineBasicMaterial).transparent = true;
-    this.scene.add(helper);
-  }
+  //#endregion PointerEvents
 }
