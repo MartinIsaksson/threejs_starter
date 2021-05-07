@@ -250,6 +250,7 @@ export class CameraRigging {
 
   render() {
     const elapsed = this.clock.getElapsedTime();
+
     const t = (elapsed % this.loopTime) / this.loopTime;
     const next = ((elapsed + 0.5) % this.loopTime) / this.loopTime;
     const position = this.spline.curve.getPointAt(t);

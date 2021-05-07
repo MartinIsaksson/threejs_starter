@@ -1,5 +1,6 @@
 import { App } from "./app/app";
 import { CameraRigging } from "./app/CameraRigging";
+import { TestScene } from "./app/CameraRigging/testScene";
 import Lander from "./app/lander";
 import { SmoothScroll } from "./app/scroller";
 //Sun
@@ -8,4 +9,6 @@ import { SmoothScroll } from "./app/scroller";
 // new SmoothScroll();
 //import { Game } from './app/game/game';
 //new Game();
-new CameraRigging();
+// new CameraRigging();
+
+new TestScene();
